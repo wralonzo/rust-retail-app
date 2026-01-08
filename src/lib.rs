@@ -5,4 +5,10 @@ pub mod bridge;
 pub mod config;
 //pub use bridge::wasm::*;
 
-uniffi::setup_scaffolding!();
+// Esto genera el código necesario para que Kotlin/Swift se conecten
+uniffi::setup_scaffolding!("rust_retail");
+
+#[uniffi::export]
+pub fn saludo(nombre: String) -> String {
+    format!("Hola, {} desde Rust!", nombre)
+}

@@ -21,7 +21,6 @@ impl AuthRepository {
     }
 
     pub async fn login(&self, req: LoginRequest) -> Result<User, AppError> {
-        // Usamos request_one porque devuelve HttpResponseApiFindOne<User>
         self.api
             .request_one::<LoginRequest, User>(Method::POST, "/auth/login", Some(req), None)
             .await

@@ -3,3 +3,5 @@ pub mod api_client;
 pub mod login_request;
 pub mod errors;
 pub mod responses;
+pub mod google_id;
+pub mod google_response;

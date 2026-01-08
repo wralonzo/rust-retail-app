@@ -5,6 +5,7 @@ edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
+name = "rust_retail"
 
 [dependencies]
 # --- CORE (2025-2026 Editions) ---
@@ -13,16 +14,17 @@ serde_json = "1.0.128"
 thiserror = "2.0" # v2.0 es la nueva versión estándar para manejo de errores
 once_cell = "1.19"
 async-trait = "0.1.82"
-uniffi = { version = "0.28", features = [
-  "tokio",
-] } # v0.28 es la actual para UniFFI
 
 # --- NETWORK ---
 # Reqwest 0.12 usa Hyper 1.0, mucho más rápido y moderno
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }
 
 # --- ASYNC ---
-tokio = { version = "1.40", features = ["rt", "sync"] }
+tokio = { version = "1.49", features = ["rt", "sync"] }
+uniffi = { version = "0.28", features = ["tokio", "cli"] }
 wasm-bindgen = "0.2.93"
 
 # --- WEB (WASM / Angular) ---
@@ -40,4 +42,9 @@ rusqlite = { version = "0.32.0", features = ["bundled"] }
 
 [dev-dependencies]
 wiremock = "0.6"
-tokio = { version = "1.40", features = ["full"] }
+# CAMBIO: No repitas la versión, solo añade las features extras para tests
+tokio = { version = "1.49", features = ["full"] }
+
+[build-dependencies]
+# Asegúrate de que esto esté así para que build.rs funcione
+uniffi = { version = "0.28", features = ["build"] }

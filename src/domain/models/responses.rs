@@ -33,3 +33,11 @@ pub struct HttpResponseObject<T> {
     pub status: u16,
     pub timestamp: String,
 }
+
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum FlexibleData<T> {
+    Single(T),
+    Array(Vec<T>),
+}

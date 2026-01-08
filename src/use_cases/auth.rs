@@ -16,14 +16,20 @@ impl LoginUseCase {
     /// Lógica de autenticación
     pub async fn execute(&self, req: LoginRequest) -> Result<User, AppError> {
         // 1. Validaciones de negocio
-        if req.username.is_empty() || req.password.is_empty() {
-            return Err(AppError::BadRequest); // Usamos el error semántico que definimos antes
+        if req.username.is_empty() {
+            return Err(AppError::EmptyField {
+                message: "Usuario".into(),
+            }); // Usamos el error semántico que definimos antes
+        }
+
+        if req.password.is_empty() {
+            return Err(AppError::EmptyField {
+                message: "Contraseña".into(),
+            }); // Usamos el error semántico que definimos antes
         }
 
         if !req.username.contains('@') {
-            return Err(AppError::NetworkError {
-                message: "Formato de email inválido".into(),
-            });
+            return Err(AppError::EmailInvalid);
         }
 
         // 2. Llamada al repositorio

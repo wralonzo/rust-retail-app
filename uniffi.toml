@@ -1,0 +1,15 @@
+[bindings.kotlin]
+# El paquete que usará tu app de Android
+package_name = "com.tuempresa.rustretail"
+# Opcional: genera archivos separados por cada módulo
+split_conflicting_declarations = true
+
+[bindings.swift]
+# El nombre del módulo en iOS (import AppCore)
+module_name = "AppCore"
+# Omite el prefijo de la librería si lo deseas
+omit_interface_prefixes = true
+
+[bindings.web]
+# Si usas uniffi-bindgen-gecko-js o similar
+module_name = "AppCore"
