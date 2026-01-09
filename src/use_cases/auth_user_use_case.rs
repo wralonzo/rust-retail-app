@@ -56,8 +56,12 @@ impl LoginUseCase {
             .map_err(|e| AppError::ParseError { message: e })?;
 
         // CORRECCIÓN 2: No existe 'token', es 'user_login.token'
+        let token = user_login.token.clone()
+            .ok_or(AppError::AuthError {
+                message: "No se recibió un token del servidor".to_string()
+            })?;
         // Y quitamos el '?' porque set_token no devuelve un Result
-        self.api_service.set_token(user_login.token.clone());
+        self.api_service.set_token(token);
 
         Ok(user_login)
     }
@@ -94,7 +98,12 @@ impl LoginUseCase {
             .await
             .map_err(|e| AppError::ParseError { message: e })?;
 
-        self.api_service.set_token(user_login_google.token.clone());
+        let token = user_login_google.token.clone()
+            .ok_or(AppError::AuthError {
+                message: "No se recibió un token del servidor".to_string()
+            })?;
+        // Y quitamos el '?' porque set_token no devuelve un Result
+        self.api_service.set_token(token);
 
         Ok(user_login_google)
     }

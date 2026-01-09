@@ -38,10 +38,20 @@ impl ApiService {
     }
 
     // Método para guardar el token después del login
-    pub fn set_token(&self, token: String) {
-        log::info!("Intentando login para el usuario: {}", token);
+    pub fn set_token<T: Into<Option<String>>>(&self, token: T) {
         if let Ok(mut t) = self.token.write() {
-            *t = Some(token);
+            let token_value: Option<String> = token.into();
+
+            match token_value {
+                Some(val) => {
+                    log::info!("🔑 Token de sesión actualizado");
+                    *t = Some(val);
+                },
+                None => {
+                    log::warn!("🗑️ El token recibido es nulo, limpiando sesión");
+                    *t = None;
+                }
+            }
         }
     }
 

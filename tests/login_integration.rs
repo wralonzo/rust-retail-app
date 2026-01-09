@@ -72,6 +72,6 @@ async fn test_external_login_flow() {
 
     // Verificaciones finales
     assert_eq!(user.id, 1);
-    assert_eq!(user.token, "tok_123");
+    assert_eq!(user.token, Some("tok_123".to_string()));
     assert_eq!(user.full_name, "Alonzo Quevedo");
 }

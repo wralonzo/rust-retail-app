@@ -7,7 +7,7 @@ use ts_rs::TS;
 pub struct User {
     pub id: i32,
     pub username: String,
-    pub token: String,
+    pub token: Option<String>,
 
     #[serde(rename = "fullName")]
     pub full_name: String,
@@ -20,7 +20,7 @@ pub struct User {
     pub password_init: Option<String>,
 
     #[serde(rename = "createdAt")]
-    pub created_at: String,
+    pub created_at: Option<String>,
 
     #[serde(rename = "updateAt")]
     pub update_at: Option<String>,

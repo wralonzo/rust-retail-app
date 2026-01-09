@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use std::sync::Arc;
+use crate::domain::models::errors::AppError;
 use crate::domain::storage::storage::SecureStorage;
 use crate::infrastructure::api_service::ApiService;
 
@@ -39,22 +40,20 @@ impl AppContainer {
     }
 
     // En main_bridge.rs
-    pub async fn hydrate_from_db(&self) -> Result<(), String> {
-        // Usamos match o if let para manejar el resultado del storage
-        match self.storage.get_session().await {
-            Ok(Some(user)) => {
+    pub async fn hydrate_from_db(&self) -> Result<(), AppError> {
+        if let Ok(Some(user)) = self.storage.get_session().await {
+            // Validamos el token aquí
+            if let Some(token) = user.token {
                 log::info!("✅ Sesión recuperada para: {}", user.username);
-                self.api_service.set_token(user.token);
+                self.api_service.set_token(token);
+                Ok(())
+            } else {
+                log::warn!("⚠️ Sesión encontrada pero el token es nulo");
                 Ok(())
             }
-            Ok(None) => {
-                log::info!("ℹ️ No hay sesión previa en el storage");
-                Ok(())
-            }
-            Err(e) => {
-                log::error!("❌ Error al leer sesión: {}", e);
-                Err(e) // Devolvemos el error del storage (que es un String)
-            }
+        } else {
+            log::info!("ℹ️ No hay sesión previa");
+            Ok(())
         }
     }
 }
