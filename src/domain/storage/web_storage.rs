@@ -6,6 +6,12 @@ use crate::domain::models::user::User;
 #[cfg(target_arch = "wasm32")]
 pub struct WebStorage;
 
+// Marcadores necesarios para usar con Arc dentro de Traits
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for WebStorage {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for WebStorage {}
+
 #[cfg(target_arch = "wasm32")]
 impl WebStorage {
     pub fn new() -> Self {

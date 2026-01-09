@@ -3,6 +3,7 @@ pub mod use_cases;
 pub mod infrastructure;
 pub mod bridge;
 pub mod config;
+pub mod utils;
 //pub use bridge::wasm::*;
 
 // Esto genera el código necesario para que Kotlin/Swift se conecten

@@ -1,8 +1,10 @@
 use rust_retail::config::config::init_core_config;
 use rust_retail::domain::models::login_request::LoginRequest;
+use rust_retail::domain::storage::sqlite_storage::SqliteStorage;
 use rust_retail::infrastructure::api_service::ApiService;
 use rust_retail::infrastructure::auth_repository::AuthRepository;
-use rust_retail::use_cases::auth::LoginUseCase; // Importante para evitar el pánico
+use rust_retail::use_cases::auth_user_use_case::LoginUseCase; // Importante para evitar el pánico
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_external_login_flow() {
@@ -43,19 +45,26 @@ async fn test_external_login_flow() {
         .mount(&server)
         .await;
 
-    // 4. Inyección de Dependencias
-    let api_service = ApiService::new();
-    let auth_repo = AuthRepository::new(api_service);
-    let login_use_case = LoginUseCase::new(auth_repo);
+    // 4. Inyección de Dependencias CORREGIDA
+    // 4.1. El servicio de API debe ser un Arc para compartirse entre Repo y UseCase
+    let api_service = Arc::new(ApiService::new());
 
-    // 5. Ejecutar la lógica de negocio
+    // 4.2. El repositorio recibe una copia del puntero del ApiService
+    let auth_repo = Arc::new(AuthRepository::new(api_service.clone()));
+
+    // 4.3. Creamos un storage temporal en memoria para el test
+    let storage = Arc::new(SqliteStorage::new(":memory:"));
+
+    // 4.4. El UseCase ahora recibe los 3 argumentos como Arc
+    let login_use_case = LoginUseCase::new(auth_repo, storage, api_service.clone());
+
+    // 5. Ejecutar la lógica de negocio (el resto del test sigue igual)
     let credentials = LoginRequest {
         username: "admin@gmail.com".to_string(),
         password: "n3z00N@beQ7(".to_string(),
     };
 
     let response = login_use_case.execute(credentials).await;
-
     // 6. Validar resultados
     assert!(response.is_ok(), "El login falló: {:?}", response.err());
 

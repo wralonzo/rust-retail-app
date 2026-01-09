@@ -3,9 +3,12 @@ use crate::domain::models::google_id::GoogleClientId;
 use crate::domain::models::login_request::LoginRequest;
 use crate::domain::models::responses::PaginatedResponse;
 use crate::domain::models::user::User;
-use crate::use_cases::auth::LoginUseCase;
+use crate::use_cases::auth_user_use_case::LoginUseCase;
 use crate::use_cases::get_google_config_use_case::GetGoogleConfigUseCase;
 use std::sync::Arc;
+use crate::bridge::main_bridge::AppContainer;
+
+use crate::infrastructure::auth_repository::AuthRepository;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod mobile;
@@ -15,15 +18,27 @@ pub mod web;
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(uniffi::Object))]
 pub struct AuthBridge {
-    pub(crate) use_case: Arc<LoginUseCase>,
+    pub(crate) login_use_case: Arc<LoginUseCase>,
     pub(crate) google_use_case: Arc<GetGoogleConfigUseCase>,
 }
 
 impl AuthBridge {
-    pub(crate) fn build_use_case() -> LoginUseCase {
-        let api_service = crate::infrastructure::api_service::ApiService::new();
-        let auth_repo = crate::infrastructure::auth_repository::AuthRepository::new(api_service);
-        LoginUseCase::new(auth_repo)
+    pub fn new_internal(container: &AppContainer) -> Self {
+        let auth_repo = Arc::new(AuthRepository::new(container.api_service.clone()));
+
+        let login_use_case_internal = Arc::new(LoginUseCase::new(
+            auth_repo,
+            container.storage.clone(),
+            container.api_service.clone()
+        ));
+
+        let google_use_case = Arc::new(GetGoogleConfigUseCase::new(container.api_service.clone()));
+
+        Self {
+            login_use_case: login_use_case_internal,
+            google_use_case,
+        }
+
     }
 
     pub(crate) async fn internal_login(
@@ -35,14 +50,24 @@ impl AuthBridge {
             username: user,
             password: pass,
         };
-        self.use_case.execute(request).await
+        self.login_use_case.execute(request).await
     }
 
     pub(crate) async fn internal_get_google_client(&self) -> Result<GoogleClientId, AppError> {
         self.google_use_case.execute().await
     }
 
-    pub(crate) async fn internal_fetch_users(&self, page: u32) -> Result<PaginatedResponse<User>, AppError> {
-        self.use_case.get_all_users(page).await
+    pub(crate) async fn internal_fetch_users(
+        &self,
+        page: u32,
+    ) -> Result<PaginatedResponse<User>, AppError> {
+        self.login_use_case.get_all_users(page).await
+    }
+
+    pub(crate) async fn internal_login_google(
+        &self,
+        app_google_id: String,
+    ) -> Result<User, AppError> {
+        self.login_use_case.execute_login_google(app_google_id).await
     }
 }

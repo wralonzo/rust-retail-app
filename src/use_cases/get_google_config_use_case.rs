@@ -1,3 +1,4 @@
+use std::sync::Arc;
 // src/domain/use_cases/get_google_config_use_case.rs
 use crate::{
     domain::models::{errors::AppError, google_id::GoogleClientId},
@@ -5,13 +6,13 @@ use crate::{
 };
 
 pub struct GetGoogleConfigUseCase {
-    api_service: ApiService,
+    api_service: Arc<ApiService>,
 }
 
 impl GetGoogleConfigUseCase {
-    pub fn new() -> Self {
+    pub fn new(api_service: Arc<ApiService>) -> Self {
         Self {
-            api_service: ApiService::new(),
+            api_service,
         }
     }
 
@@ -19,7 +20,7 @@ impl GetGoogleConfigUseCase {
         // Si tu do_get ahora devuelve Result<O, AppError>
         let response: GoogleClientId = self
             .api_service
-            .do_get("config/google") // Ajusta el endpoint según tu API
+            .do_get("/config/google-client-id") // Ajusta el endpoint según tu API
             .await?;
 
         Ok(response)

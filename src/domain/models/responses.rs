@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PaginatedResponse<T> {
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[ts(export, rename_all = "camelCase")]
+pub struct PaginatedResponse<T: TS> {
     pub content: Vec<T>,
 
     #[serde(rename = "totalElements")]
@@ -16,8 +18,9 @@ pub struct PaginatedResponse<T> {
     pub first: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct HttpResponseApi<T> {
+#[derive(Debug, Deserialize, Serialize,TS)]
+#[ts(export, rename_all = "camelCase")]
+pub struct HttpResponseApi<T: TS> {
     pub success: bool,
     pub message: String,
     pub data: PaginatedResponse<T>,
@@ -25,15 +28,15 @@ pub struct HttpResponseApi<T> {
     pub timestamp: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct HttpResponseObject<T> {
+#[derive(Debug, Deserialize, Serialize, TS)]
+#[ts(export, rename_all = "camelCase")]
+pub struct HttpResponseObject<T: TS>{
     pub success: bool,
     pub message: String,
     pub data: T,
     pub status: u16,
     pub timestamp: String,
 }
-
 
 #[derive(Deserialize)]
 #[serde(untagged)]

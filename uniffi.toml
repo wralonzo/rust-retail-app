@@ -1,6 +1,6 @@
 [bindings.kotlin]
 # El paquete que usará tu app de Android
-package_name = "com.tuempresa.rustretail"
+package_name = "com.wralonzo.rustretail"
 # Opcional: genera archivos separados por cada módulo
 split_conflicting_declarations = true
 

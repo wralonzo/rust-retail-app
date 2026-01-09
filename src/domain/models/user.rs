@@ -1,7 +1,9 @@
 // src/domain/models/user.rs
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Serialize, Deserialize, Clone, uniffi::Record)]
+#[derive(TS, Debug, Serialize, Deserialize, Clone, uniffi::Record)]
+#[ts(export, export_to = "User.ts")]
 pub struct User {
     pub id: i32,
     pub username: String,
@@ -9,10 +11,13 @@ pub struct User {
 
     #[serde(rename = "fullName")]
     pub full_name: String,
-    pub phone: String,
-    pub address: String,
+    pub phone: Option<String>,
+    pub address: Option<String>,
     pub avatar: Option<String>,
     pub password: Option<String>,
+
+    #[serde(rename = "passwordInit")]
+    pub password_init: Option<String>,
 
     #[serde(rename = "createdAt")]
     pub created_at: String,
@@ -23,17 +28,18 @@ pub struct User {
     #[serde(rename = "deletedAt")]
     pub deleted_at: Option<String>,
 
-    #[serde(rename = "passwordInit")]
-    pub password_init: Option<String>,
     pub employee: Option<Employee>,
     pub roles: Option<Vec<String>>,
     pub enabled: Option<bool>,
 
     #[serde(rename = "clientId")]
     pub client_id: Option<i32>,
+
+    pub provider: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, uniffi::Record)]
+#[derive(TS, Debug, Serialize, Deserialize, Clone, uniffi::Record)]
+#[ts(export, export_to = "Employee.ts")]
 pub struct Employee {
     pub id: i32,
 
@@ -50,10 +56,10 @@ pub struct Employee {
     pub position_nam: String,
 }
 
-
 // src/domain/models/responses.rs
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[derive(TS, Debug, Clone, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[ts(export, export_to = "UserPage.ts")]
 pub struct UserPage {
     pub content: Vec<User>,
     pub total_elements: u64,

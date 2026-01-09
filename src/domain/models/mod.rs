@@ -5,3 +5,5 @@ pub mod errors;
 pub mod responses;
 pub mod google_id;
 pub mod google_response;
+pub mod client;
+pub mod delete;

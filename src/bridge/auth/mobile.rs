@@ -2,8 +2,8 @@ use super::AuthBridge;
 use crate::domain::models::errors::AppError;
 use crate::domain::models::google_response::GoogleResponse;
 use crate::domain::models::user::User;
-use crate::use_cases::get_google_config_use_case::GetGoogleConfigUseCase;
 use std::sync::Arc;
+use crate::bridge::main_bridge::AppContainer;
 
 #[derive(uniffi::Record)]
 pub struct UserPaginatedResponse {
@@ -20,10 +20,8 @@ pub struct UserPaginatedResponse {
 impl AuthBridge {
     #[uniffi::constructor]
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            use_case: Arc::new(Self::build_use_case()),
-            google_use_case: Arc::new(GetGoogleConfigUseCase::new()), // <--- Faltaba este campo
-        })
+        let container = AppContainer::get_instance();
+        Arc::new(Self::new_internal(container))
     }
 
     pub async fn login(&self, email: String, password: String) -> Result<User, AppError> {
@@ -54,5 +52,9 @@ impl AuthBridge {
             last: internal_data.last,
             first: internal_data.first,
         })
+    }
+
+    pub async fn login_google(&self, google_app_id: String) -> Result<User, AppError> {
+        self.internal_login_google(google_app_id).await
     }
 }
