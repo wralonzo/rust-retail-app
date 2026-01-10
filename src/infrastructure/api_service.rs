@@ -1,4 +1,3 @@
-use crate::config::config::get_base_url;
 use crate::domain::models::errors::AppError;
 use crate::domain::models::responses::{HttpResponseApi, HttpResponseObject, PaginatedResponse};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
@@ -9,10 +8,11 @@ use std::sync::RwLock;
 pub struct ApiService {
     client: reqwest::Client,
     token: RwLock<Option<String>>,
+    base_url: String,
 }
 
 impl ApiService {
-    pub fn new() -> Self {
+    pub fn new(base_url: String) -> Self {
         let mut headers = HeaderMap::new();
 
         // 2. Insertar el header requerido por tu backend
@@ -30,11 +30,12 @@ impl ApiService {
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()), // Fallback por si falla el builder
             token: RwLock::new(None),
+            base_url,
         }
     }
 
-    pub fn get_base_url_internal(&self) -> String {
-        get_base_url()
+    pub fn get_base_url_internal(&self) -> &str {
+        &self.base_url
     }
 
     // Método para guardar el token después del login
@@ -63,19 +64,24 @@ impl ApiService {
 
     // Función interna para construir la petición con el Bearer Token
     fn build_request(&self, method: reqwest::Method, url: &str) -> reqwest::RequestBuilder {
-        let mut rb = self.client.request(method.clone(), url);
+        let mut rb = self.client
+            .request(method.clone(), url)
+            // Inyectamos el header de origen siempre aquí
+            .header("x-app-origin", "TopFashion-Angular-App")
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json");
 
+        // Lógica del Token
         match self.token.read() {
             Ok(t_guard) => {
                 if let Some(token) = t_guard.as_ref() {
-                    log::info!("✅ [ApiService] Inyectando Token en {}: Bearer ...{}", method, &token[..token.len().min(10)]);
                     rb = rb.header("Authorization", format!("Bearer {}", token));
                 } else {
-                    log::warn!("⚠️ [ApiService] El guard del token es None (No hay sesión activa) para {}", url);
+                    log::warn!("⚠️ No hay sesión activa para {}", url);
                 }
             },
             Err(e) => {
-                log::error!("❌ [ApiService] Error de bloqueo (Poisoned Lock) al leer el token: {}", e);
+                log::error!("❌ Error de bloqueo en token: {}", e);
             }
         }
         rb

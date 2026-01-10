@@ -1,13 +1,13 @@
 use crate::domain::models::errors::AppError;
 use crate::domain::models::responses::{PaginatedResponse};
-use crate::infrastructure::api_service::ApiService;
 use async_trait::async_trait;
-use reqwest::Method;
 use std::sync::Arc;
 use crate::domain::models::client::client_response::{ClientRequest, ClientResponse};
 use send_wrapper::SendWrapper;
+use crate::infrastructure::http_client_rust::HttpClientRust;
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait ClientRepositoryTrait: Send + Sync {
     /* ?term=&sort=name,asc&page=0&size=10&clientType */
     async fn find(&self, query_params: String) -> Result<PaginatedResponse<ClientResponse>, AppError>;
@@ -18,89 +18,65 @@ pub trait ClientRepositoryTrait: Send + Sync {
 }
 
 pub struct ClientRepository {
-    api: Arc<ApiService>,
+    api: Arc<HttpClientRust>,
 }
 
 // Las funciones que no pertenecen al Trait (como new) van en un impl propio
 impl ClientRepository {
     const CONTROLLER_PATH: &'static str = "/client";
 
-    pub fn new(api: Arc<ApiService>) -> Self {
+    pub fn new(api: Arc<HttpClientRust>) -> Self {
         Self { api }
     }
 }
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl ClientRepositoryTrait for ClientRepository {
     async fn find(&self, query_params: String) -> Result<PaginatedResponse<ClientResponse>, AppError> {
         let endpoint = format!("{}{}", Self::CONTROLLER_PATH, query_params);
 
-        // 1. Apuntamos al envoltorio HttpResponseApi
-        let future = self.api.request_one::<(), PaginatedResponse<ClientResponse>>(
-            Method::GET,
-            &endpoint,
-            None,
-            None
-        );
+        // El método .get ya sabe que O: PaginatedResponse<ClientResponse>
+        let future = self.api.get::<PaginatedResponse<ClientResponse>>(&endpoint);
 
-        // 2. Ejecutamos el futuro
-        let response = SendWrapper::new(future).await?;
-
-        // 3. Extraemos solo la data (que es el PaginatedResponse)
-        Ok(response)
+        SendWrapper::new(future).await
     }
 
     async fn save(&self, req: ClientRequest) -> Result<ClientResponse, AppError> {
-        let future = self.api.request_one::<ClientRequest, ClientResponse>(
-            Method::POST,
+        // Usamos el método .post directo que creamos en HttpClientRust
+        let future = self.api.post::<ClientRequest, ClientResponse>(
             Self::CONTROLLER_PATH,
-            Some(req),
-            None,
+            req
         );
 
-        // 2. Lo envolvemos para "engañar" a UniFFI y decirle que es Send
         SendWrapper::new(future).await
     }
 
     async fn find_one(&self, id: i32) -> Result<ClientResponse, AppError> {
-        let api = self.api.clone();
         let endpoint = format!("{}/{}", Self::CONTROLLER_PATH, id);
 
-        // CREAMOS EL WRAPPER QUE CONTIENE TODA LA LÓGICA ASÍNCRONA
-        let wrapped_fut = SendWrapper::new(async move {
-            api.request_one::<(), ClientResponse>(
-                reqwest::Method::GET,
-                &endpoint,
-                None,
-                None,
-            ).await
-        });
+        let future = self.api.get::<ClientResponse>(&endpoint);
 
-        // Al hacer await al wrapper, UniFFI queda satisfecho porque el wrapper es 'Send'
-        wrapped_fut.await
-    }
-
-    async fn delete(&self, id: i32) -> Result<String, AppError> {
-        let endpoint = format!("{}/{}",Self::CONTROLLER_PATH, id); // Evita E0716
-        let future = self.api.request_one::<(), String>(
-            Method::DELETE,
-            &endpoint,
-            None,
-            None,
-        );
         SendWrapper::new(future).await
     }
 
-    async fn update(&self, id:i32, req: ClientRequest) -> Result<ClientResponse, AppError> {
-        let endpoint = format!("{}/{}/delete",Self::CONTROLLER_PATH, id);
-        let future = self.api.request_one::<ClientRequest, ClientResponse>(
-            Method::PUT,
+    async fn delete(&self, id: i32) -> Result<String, AppError> {
+        let endpoint = format!("{}/{}", Self::CONTROLLER_PATH, id);
+
+        // Si el delete devuelve un String de confirmación
+        let future = self.api.delete::<String>(&endpoint);
+
+        SendWrapper::new(future).await
+    }
+
+    async fn update(&self, id: i32, req: ClientRequest) -> Result<ClientResponse, AppError> {
+        let endpoint = format!("{}/{}", Self::CONTROLLER_PATH, id);
+
+        let future = self.api.put::<ClientRequest, ClientResponse>(
             &endpoint,
-            Some(req),
-            None,
+            req
         );
 
-        // SendWrapper "convierte" el futuro !Send en Send
         SendWrapper::new(future).await
     }
 }

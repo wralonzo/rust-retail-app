@@ -1,38 +1,55 @@
-#[derive(Debug, thiserror::Error, uniffi::Error, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS, uniffi::Record)]
+#[ts(export)]
+pub struct ApiErrorPayload {
+    /// JSON crudo del backend convertido a String para compatibilidad total
+    pub error_api: String,
+    pub message: String,
+    pub code: i16,
+}
+
+#[derive(Debug, thiserror::Error, uniffi::Error, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[uniffi(flat_error)]
+#[ts(export)]
+#[serde(tag = "type", content = "payload")]
 pub enum AppError {
+    #[error("API Error: {0:?}")]
+    ApiError(ApiErrorPayload),
+
     #[error("Error de red: {message}")]
     NetworkError { message: String },
 
-    #[error("{message}")]
+    #[error("Error de autenticación: {message}")]
     AuthError { message: String },
 
-    #[error("{message}")]
+    #[error("No encontrado: {message}")]
     NotFoundError { message: String },
 
-    #[error("{message}")]
+    #[error("Pago requerido: {message}")]
     PaymentRequired { message: String },
 
-    #[error(" {message}")]
+    #[error("Error en servidor: {message}")]
     ServerError { message: String },
 
-    #[error("{message}")]
+    #[error("Error de procesamiento: {message}")]
     ParseError { message: String },
 
-    #[error("El campo: {message} está vacío")]
+    #[error("El campo {message} está vacío")]
     EmptyField { message: String },
 
-    #[error("Unauthorized")]
+    #[error("No autorizado")]
     Unauthorized,
 
-    #[error("Complete todos los campos")]
+    #[error("Solicitud incorrecta")]
     BadRequest,
 
-    #[error("El correo ingresado es incorrecto")]
+    #[error("Correo inválido")]
     EmailInvalid,
 
-    #[error("{message}")]
+    #[error("Conflicto: {message}")]
     Conflict { message: String },
+
+    #[error("Almacenamiento local, no compatible, {message}")]
+    DatabaseError { message: String },
 
     #[error("Error desconocido")]
     Unknown,

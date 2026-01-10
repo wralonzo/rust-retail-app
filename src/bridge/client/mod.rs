@@ -26,7 +26,7 @@ pub struct ClientBridge {
 impl ClientBridge {
     pub fn new_internal(container: &AppContainer) -> Self {
         // Aquí pasamos el MISMO api_service que recibió AuthBridge
-        let repo = Arc::new(ClientRepository::new(container.api_service.clone()));
+        let repo = Arc::new(ClientRepository::new(container.http_client.clone()));
 
         Self {
             add_client_use_case: Arc::new(AddClientUseCase::new(repo.clone())),

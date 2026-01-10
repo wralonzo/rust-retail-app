@@ -5,7 +5,7 @@ use crate::domain::storage::storage::SecureStorage;
 #[cfg(not(target_arch = "wasm32"))]
 use async_trait::async_trait;
 #[cfg(not(target_arch = "wasm32"))]
-use rusqlite::{params, Connection};
+use rusqlite::{Connection};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub struct SqliteStorage {
@@ -34,12 +34,22 @@ impl SqliteStorage {
 #[async_trait]
 impl SecureStorage for SqliteStorage {
     async fn save_session(&self, user: &User) -> Result<(), String> {
-        let json = serde_json::to_string(user).map_err(|e| e.to_string())?;
+        // 1. Clonamos el objeto para no alterar el usuario en memoria
+        // Así el HttpClient sigue teniendo el token para las peticiones actuales
+        let mut user_to_save = user.clone();
+
+        // 2. Removemos el token antes de serializar a JSON
+        user_to_save.token = None;
+
+        // 3. Serializamos la versión "limpia"
+        let json = serde_json::to_string(&user_to_save).map_err(|e| e.to_string())?;
+
+        // 4. Guardamos en la base de datos SQLite
         let conn = self.conn.lock().map_err(|_| "Poisoned lock".to_string())?;
 
         conn.execute(
             "INSERT OR REPLACE INTO user_session (id, data) VALUES (1, ?1)",
-            params![json],
+            [json], // Usamos la sintaxis moderna de arreglos para params
         )
         .map_err(|e| e.to_string())?;
 

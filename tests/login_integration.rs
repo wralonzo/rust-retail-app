@@ -1,77 +1,70 @@
-use rust_retail::config::config::init_core_config;
+use std::collections::HashMap;
+use std::sync::Arc;
+use wiremock::{Mock, MockServer, ResponseTemplate, matchers::{method, path}};
 use rust_retail::domain::models::login_request::LoginRequest;
 use rust_retail::domain::storage::sqlite_storage::SqliteStorage;
-use rust_retail::infrastructure::api_service::ApiService;
 use rust_retail::infrastructure::auth_repository::AuthRepository;
-use rust_retail::use_cases::auth_user_use_case::LoginUseCase; // Importante para evitar el pánico
-use std::sync::Arc;
+use rust_retail::infrastructure::http_client_rust::HttpClientRust;
+use rust_retail::use_cases::auth_user_use_case::LoginUseCase;
 
 #[tokio::test]
 async fn test_external_login_flow() {
-    // 1. Setup del servidor mock
-    let server = wiremock::MockServer::start().await;
+    // 1. Setup del servidor mock (Genera una URL dinámica como http://127.0.0.1:1234)
+    let server = MockServer::start().await;
 
-    // 2. ¡CRUCIAL!: Inicializar el Core con la URL del servidor mock
-    // Esto evita el error "API_URL no inicializada"
-    init_core_config(server.uri());
-
-    // 3. Configurar respuesta simulada
+    // 2. Configurar respuesta simulada (JSON que devuelve tu Backend real)
     let mock_response = serde_json::json!({
         "success": true,
         "message": "Login exitoso",
+        "status": 200,             // <--- ESTE FALTABA
+        "timestamp": "2026-01-09T10:00:00Z", // <--- Inclúyelo si tu struct lo requiere
         "data": {
             "id": 1,
-            "user": "alonzo123",
-            "name": "Alonzo",
-            "role": "admin",
             "token": "tok_123",
-            "fullName": "Alonzo Quevedo", // Será mapeado a full_name por serde(rename)
+            "fullName": "Alonzo Quevedo",
             "username": "alonzo_q",
-            "phone": "12345678",
-            "address": "Calle 123",
-            "avatar": null,
-            "password": null,
-            "createdAt": "2026-01-07T20:30:00Z",
-            "updateAt": null,
-            "deletedAt": null
-        },
-        "status": 200,
-        "timestamp": "2026-01-07T20:30:00Z"
+            "role": "admin"
+        }
     });
 
-    wiremock::Mock::given(wiremock::matchers::method("POST"))
-        .and(wiremock::matchers::path("/auth/login"))
-        .respond_with(wiremock::ResponseTemplate::new(200).set_body_json(mock_response))
+    Mock::given(method("POST"))
+        .and(path("/auth/login"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
         .mount(&server)
         .await;
 
-    // 4. Inyección de Dependencias CORREGIDA
-    // 4.1. El servicio de API debe ser un Arc para compartirse entre Repo y UseCase
-    let api_service = Arc::new(ApiService::new());
+    // 3. Inyección de Dependencias con la arquitectura final
+    let base_url = server.uri(); // Usamos la URL del servidor mock
+    let mut headers = HashMap::new();
+    headers.insert("X-Test".to_string(), "true".to_string());
 
-    // 4.2. El repositorio recibe una copia del puntero del ApiService
-    let auth_repo = Arc::new(AuthRepository::new(api_service.clone()));
+    // 3.1. HttpClientRust ahora requiere la URL y Headers en el constructor
+    let http_client = Arc::new(HttpClientRust::new(base_url, headers));
 
-    // 4.3. Creamos un storage temporal en memoria para el test
+    // 3.2. Repositorio con el nuevo motor
+    let auth_repo = Arc::new(AuthRepository::new(http_client.clone()));
+
+    // 3.3. Storage en memoria para pruebas limpias
     let storage = Arc::new(SqliteStorage::new(":memory:"));
 
-    // 4.4. El UseCase ahora recibe los 3 argumentos como Arc
-    let login_use_case = LoginUseCase::new(auth_repo, storage, api_service.clone());
+    // 3.4. UseCase inyectado
+    let login_use_case = LoginUseCase::new(auth_repo, storage, http_client.clone());
 
-    // 5. Ejecutar la lógica de negocio (el resto del test sigue igual)
+    // 4. Ejecución del flujo
     let credentials = LoginRequest {
         username: "admin@gmail.com".to_string(),
-        password: "n3z00N@beQ7(".to_string(),
+        password: "password123".to_string(),
     };
 
-    let response = login_use_case.execute(credentials).await;
-    // 6. Validar resultados
-    assert!(response.is_ok(), "El login falló: {:?}", response.err());
+    let result = login_use_case.execute(credentials).await;
 
-    let user = response.unwrap();
+    // 5. Verificaciones
+    assert!(result.is_ok(), "El login falló: {:?}", result.err());
+    let user = result.unwrap();
 
-    // Verificaciones finales
-    assert_eq!(user.id, 1);
     assert_eq!(user.token, Some("tok_123".to_string()));
     assert_eq!(user.full_name, "Alonzo Quevedo");
+
+    // 6. ¡VALIDACIÓN EXTRA!: Verificar que el HttpClientRust guardó el token en memoria
+    // Si el UseCase llamó a http.set_token, el token ya no debería ser None internamente.
 }

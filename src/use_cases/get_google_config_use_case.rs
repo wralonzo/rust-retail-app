@@ -2,25 +2,25 @@ use std::sync::Arc;
 // src/domain/use_cases/get_google_config_use_case.rs
 use crate::{
     domain::models::{errors::AppError, google_id::GoogleClientId},
-    infrastructure::api_service::ApiService,
 };
+use crate::infrastructure::http_client_rust::HttpClientRust;
 
 pub struct GetGoogleConfigUseCase {
-    api_service: Arc<ApiService>,
+    http: Arc<HttpClientRust>,
 }
 
 impl GetGoogleConfigUseCase {
-    pub fn new(api_service: Arc<ApiService>) -> Self {
+    pub fn new(http: Arc<HttpClientRust>) -> Self {
         Self {
-            api_service,
+            http,
         }
     }
 
     pub async fn execute(&self) -> Result<GoogleClientId, AppError> {
         // Si tu do_get ahora devuelve Result<O, AppError>
         let response: GoogleClientId = self
-            .api_service
-            .do_get("/config/google-client-id") // Ajusta el endpoint según tu API
+            .http
+            .get("/config/google-client-id") // Ajusta el endpoint según tu API
             .await?;
 
         Ok(response)

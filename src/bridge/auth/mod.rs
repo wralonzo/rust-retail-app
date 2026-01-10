@@ -24,21 +24,22 @@ pub struct AuthBridge {
 
 impl AuthBridge {
     pub fn new_internal(container: &AppContainer) -> Self {
-        let auth_repo = Arc::new(AuthRepository::new(container.api_service.clone()));
+        // 1. Usamos el nuevo http_client centralizado
+        let auth_repo = Arc::new(AuthRepository::new(container.http_client.clone()));
 
+        // 2. Pasamos el http_client al caso de uso para que pueda hacer 'set_token'
         let login_use_case_internal = Arc::new(LoginUseCase::new(
             auth_repo,
             container.storage.clone(),
-            container.api_service.clone()
+            container.http_client.clone() // Inyección vital
         ));
 
-        let google_use_case = Arc::new(GetGoogleConfigUseCase::new(container.api_service.clone()));
+        let google_use_case = Arc::new(GetGoogleConfigUseCase::new(container.http_client.clone()));
 
         Self {
             login_use_case: login_use_case_internal,
             google_use_case,
         }
-
     }
 
     pub(crate) async fn internal_login(

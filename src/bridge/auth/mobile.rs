@@ -3,12 +3,13 @@ use crate::domain::models::errors::AppError;
 use crate::domain::models::google_response::GoogleResponse;
 use crate::domain::models::user::User;
 use std::sync::Arc;
+use send_wrapper::SendWrapper;
 use crate::bridge::main_bridge::AppContainer;
 
 #[derive(uniffi::Record)]
 pub struct UserPaginatedResponse {
     pub content: Vec<User>,
-    pub total_elements: u64,
+    pub total_elements: u32,
     pub total_pages: u32,
     pub size: u32,
     pub number: u32,
@@ -25,13 +26,14 @@ impl AuthBridge {
     }
 
     pub async fn login(&self, email: String, password: String) -> Result<User, AppError> {
-        self.internal_login(email, password).await
+        // Envolvemos el futuro interno en SendWrapper
+        SendWrapper::new(self.internal_login(email, password)).await
     }
 
     pub async fn get_id_google_client(&self) -> Result<GoogleResponse, AppError> {
-        let client_id_model = self.internal_get_google_client().await?;
+        let future = self.internal_get_google_client();
+        let client_id_model = SendWrapper::new(future).await?;
 
-        // Mapeamos el resultado genérico al tipo concreto que UniFFI acepta
         Ok(GoogleResponse {
             data: client_id_model,
             success: true,
@@ -40,9 +42,9 @@ impl AuthBridge {
     }
 
     pub async fn get_users(&self, page: u32) -> Result<UserPaginatedResponse, AppError> {
-        let internal_data = self.internal_fetch_users(page).await?;
+        let future = self.internal_fetch_users(page);
+        let internal_data = SendWrapper::new(future).await?;
 
-        // Simplemente envolvemos el genérico en el struct concreto
         Ok(UserPaginatedResponse {
             content: internal_data.content,
             total_elements: internal_data.total_elements,
@@ -55,6 +57,18 @@ impl AuthBridge {
     }
 
     pub async fn login_google(&self, google_app_id: String) -> Result<User, AppError> {
-        self.internal_login_google(google_app_id).await
+        SendWrapper::new(self.internal_login_google(google_app_id)).await
+    }
+
+    pub async fn logout(&self) {
+        // Al ser un void (unit type), también lo envolvemos si es async
+        SendWrapper::new(AppContainer::get_instance().logout()).await;
+    }
+
+    pub async fn get_user_local(&self) -> Result<Option<User>, AppError> {
+        let container = AppContainer::get_instance();
+        
+        // Envolvemos la llamada al container en SendWrapper
+        SendWrapper::new(container.get_user_local()).await
     }
 }

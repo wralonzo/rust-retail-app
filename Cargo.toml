@@ -29,6 +29,7 @@ uniffi = { version = "0.28.3", features = ["tokio", "cli"] }
 wasm-bindgen = "0.2.93"
 send_wrapper = { version = "0.6", features = ["futures"] }
 once_cell = "1.21.3"
+console_error_panic_hook = "0.1.7"
 
 # --- WEB (WASM / Angular) ---
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -46,6 +47,7 @@ wasm-logger = "0.2"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Rusqlite se queda aquí para no romper el build de Angular
 rusqlite = { version = "0.38.0", features = ["bundled"] }
+credentials = "1.0.0-beta.1"
 
 # Para Android (Logcat)
 [target.'cfg(target_os = "android")'.dependencies]

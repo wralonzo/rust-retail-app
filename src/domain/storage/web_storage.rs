@@ -23,17 +23,28 @@ impl WebStorage {
 #[async_trait]
 impl SecureStorage for WebStorage {
     async fn save_session(&self, user: &User) -> Result<(), String> {
+        // 1. Obtener acceso al almacenamiento del navegador
         let window = web_sys::window().ok_or_else(|| "No window found".to_string())?;
         let storage = window
             .local_storage()
             .map_err(|_| "Storage access denied".to_string())?
             .ok_or_else(|| "LocalStorage not available".to_string())?;
 
-        let json = serde_json::to_string(user).map_err(|e| e.to_string())?;
+        // 2. Crear copia local y anonimizar el token
+        // Clonamos aquí para que el 'user' original que recibió la función
+        // siga teniendo su token intacto para futuras peticiones HTTP.
+        let mut user_to_save = user.clone();
+        user_to_save.token = None;
 
+        // 3. Serializar a JSON
+        let serialized = serde_json::to_string(&user_to_save).map_err(|e| e.to_string())?;
+
+        // 4. Persistir en el navegador
         storage
-            .set_item("user_data", &json)
-            .map_err(|_| "Error saving to browser".to_string())
+            .set_item("session_user", &serialized)
+            .map_err(|_| "Failed to save to storage".to_string())?;
+
+        Ok(())
     }
 
     async fn get_session(&self) -> Result<Option<User>, String> {

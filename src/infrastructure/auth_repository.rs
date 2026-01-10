@@ -4,50 +4,54 @@ use crate::domain::models::errors::AppError;
 use crate::domain::models::login_request::LoginRequest;
 use crate::domain::models::responses::PaginatedResponse;
 use crate::domain::models::user::User;
-use crate::infrastructure::api_service::ApiService;
 use async_trait::async_trait;
-use reqwest::Method;
 use serde_json::json;
+use crate::infrastructure::http_client_rust::HttpClientRust;
 
-#[async_trait]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 pub trait AuthRepositoryTrait: Send + Sync {
     async fn login(&self, req: LoginRequest) -> Result<User, AppError>;
 }
 pub struct AuthRepository {
-    api: Arc<ApiService>,
+    http: Arc<HttpClientRust>,
 }
 
 impl AuthRepository {
-    pub fn new(api: Arc<ApiService>) -> Self {
-        Self { api }
+    pub fn new(http: Arc<HttpClientRust>) -> Self {
+        Self { http }
     }
+}
 
-    pub async fn login(&self, req: LoginRequest) -> Result<User, AppError> {
-        self.api
-            .request_one::<LoginRequest, User>(Method::POST, "/auth/login", Some(req), None)
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+impl AuthRepositoryTrait for AuthRepository   {
+    async fn login(&self, req: LoginRequest) -> Result<User, AppError> {
+        self.http
+            .post::<LoginRequest, User>("/auth/login", req)
             .await
     }
+}
 
+impl AuthRepository {
     pub async fn fetch_users(&self, page: u32) -> Result<PaginatedResponse<User>, AppError> {
         let endpoint = format!("/users?page={}", page);
 
-        // El ApiService ya sabe desempaquetar el wrapper JSON y devolvernos la PaginatedResponse
-        self.api
-            .request_paginated::<(), User>(reqwest::Method::GET, &endpoint, None)
+        // En HttpClientRust: get<O>(path)
+        // El tipo de salida (O) debe coincidir con el Result
+        self.http
+            .get::<PaginatedResponse<User>>(&endpoint)
             .await
     }
 
     pub async fn login_google(&self, google_app_id: String) -> Result<User, AppError> {
-        // Creamos el cuerpo dinámicamente sin definir una struct
+        // Usamos json! para el cuerpo dinámico
         let body = json!({
             "idToken": google_app_id
         });
-        self.api.request_one::<serde_json::Value, User>(
-            reqwest::Method::POST,
-            "/auth/google",
-            Some(body),
-            None,
-        )
-        .await
+
+        self.http
+            .post::<serde_json::Value, User>("/auth/google", body)
+            .await
     }
 }

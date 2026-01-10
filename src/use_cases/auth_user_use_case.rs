@@ -5,25 +5,25 @@ use crate::domain::models::login_request::LoginRequest;
 use crate::domain::models::responses::PaginatedResponse; // Importamos el modelo de paginación
 use crate::domain::models::user::User;
 use crate::domain::storage::storage::SecureStorage;
-use crate::infrastructure::api_service::ApiService;
-use crate::infrastructure::auth_repository::AuthRepository;
+use crate::infrastructure::auth_repository::{AuthRepository, AuthRepositoryTrait};
+use crate::infrastructure::http_client_rust::HttpClientRust;
 
 pub struct LoginUseCase {
     repository: Arc<AuthRepository>, // Cambiado a Arc<dyn ...>
     storage: Arc<dyn SecureStorage>, // Cambiado a Arc<dyn ...>
-    pub api_service: Arc<ApiService>,
+    pub http: Arc<HttpClientRust>,
 }
 
 impl LoginUseCase {
     pub fn new(
         repository: Arc<AuthRepository>,
         storage: Arc<dyn SecureStorage>,
-        api_service: Arc<ApiService>,
+        http: Arc<HttpClientRust>,
     ) -> Self {
         Self {
             repository,
             storage,
-            api_service,
+            http,
         }
     }
 
@@ -50,18 +50,13 @@ impl LoginUseCase {
 
         // CORRECCIÓN 1: save_session es async, necesita .await antes del ?
         // Además, mapeamos el String de error a AppError
-        self.storage
-            .save_session(&user_login)
-            .await
-            .map_err(|e| AppError::ParseError { message: e })?;
+        if let Some(token) = &user_login.token {
+            // 2. ACTUALIZACIÓN GLOBAL: Inyectamos el token en el motor de red
+            self.http.set_token(token.clone());
 
-        // CORRECCIÓN 2: No existe 'token', es 'user_login.token'
-        let token = user_login.token.clone()
-            .ok_or(AppError::AuthError {
-                message: "No se recibió un token del servidor".to_string()
-            })?;
-        // Y quitamos el '?' porque set_token no devuelve un Result
-        self.api_service.set_token(token);
+            // 3. PERSISTENCIA: Guardamos en DB local (SQLite/Web) para el próximo arranque
+            let _ = self.storage.save_session(&user_login.clone()).await;
+        }
 
         Ok(user_login)
     }
@@ -73,7 +68,7 @@ impl LoginUseCase {
 
     pub async fn init_session(&self) -> bool {
         if let Ok(Some(user)) = self.storage.get_session().await {
-            self.api_service.set_token(user.token);
+            self.http.set_token(user.token);
             return true;
         }
         false
@@ -81,7 +76,7 @@ impl LoginUseCase {
 
     pub async fn execute_logout(&self) -> Result<(), String> {
         self.storage.delete_session().await?;
-        self.api_service.clear_token();
+        self.http.clear_token();
         Ok(())
     }
 
@@ -103,7 +98,7 @@ impl LoginUseCase {
                 message: "No se recibió un token del servidor".to_string()
             })?;
         // Y quitamos el '?' porque set_token no devuelve un Result
-        self.api_service.set_token(token);
+        self.http.set_token(token);
 
         Ok(user_login_google)
     }
