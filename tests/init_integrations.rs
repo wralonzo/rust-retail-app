@@ -11,7 +11,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_api_service_uses_global_url() {
         // 2. Definimos la URL esperada
-        let expected_url = "http://localhost:8080/app/api";
+        let _expected_url = "http://localhost:8080/app/api";
         let server = MockServer::start().await;
 
         // 3. Inicializamos
@@ -21,7 +21,7 @@ mod integration_tests {
         let api = ApiService::new(base_url);
 
         // 5. Obtenemos la URL a través del helper del servicio
-        let result = api.get_base_url_internal();
+        let _result = api.get_base_url_internal();
 
         // 6. Verificación
        

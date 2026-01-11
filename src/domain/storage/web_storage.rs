@@ -41,7 +41,7 @@ impl SecureStorage for WebStorage {
 
         // 4. Persistir en el navegador
         storage
-            .set_item("session_user", &serialized)
+            .set_item("user_data", &serialized)
             .map_err(|_| "Failed to save to storage".to_string())?;
 
         Ok(())
@@ -72,5 +72,32 @@ impl SecureStorage for WebStorage {
         storage
             .remove_item("user_data")
             .map_err(|_| "Delete error".to_string())
+    }
+
+    async fn save_preference(&self, key: &str, value: &str) -> Result<(), String> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage().map_err(|_| "No storage")?.unwrap();
+        storage
+            .set_item(key, value)
+            .map_err(|_| "Save error".to_string())
+    }
+
+    async fn get_preference(&self, key: &str) -> Result<Option<String>, String> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage().map_err(|_| "No storage")?.unwrap();
+        storage.get_item(key).map_err(|_| "Read error".to_string())
+    }
+
+    async fn delete_preference(&self, key: &str) -> Result<(), String> {
+        let window = web_sys::window().ok_or("No window")?;
+        let storage = window.local_storage().map_err(|_| "No storage")?.unwrap();
+        storage
+            .remove_item(key)
+            .map_err(|_| "Delete error".to_string())
+    }
+
+    async fn save_token(&self, token: &str) -> Result<(), String> {
+        // En Web, si quieres persistir el token (bajo tu propio riesgo XSS)
+        self.save_preference("auth_token", token).await
     }
 }

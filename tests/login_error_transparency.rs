@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 use wiremock::matchers::method;
-use rust_retail::domain::models::errors::AppError;
 use rust_retail::domain::models::login_request::LoginRequest;
 use rust_retail::domain::storage::sqlite_storage::SqliteStorage;
 use rust_retail::infrastructure::auth_repository::AuthRepository;
@@ -43,7 +42,7 @@ async fn test_login_error_transparency() {
         password: "password123".to_string(),
     };
     let login_use_case = LoginUseCase::new(auth_repo, storage, http_client.clone());
-    let result = login_use_case.execute(credentials).await;
+    let _result = login_use_case.execute(credentials).await;
 
     // Validamos que el error sea de tipo ApiError y contenga el JSON original
 

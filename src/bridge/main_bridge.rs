@@ -71,17 +71,25 @@ impl AppContainer {
         )
     }
 
-    // En main_bridge.rs
-    /// Recupera el token del storage y lo inyecta en el cliente HTTP
     pub async fn hydrate_session(&self) -> Result<(), AppError> {
-        if let Ok(Some(user)) = self.storage.get_session().await {
-            if let Some(token) = user.token {
-                log::info!("✅ Sesión recuperada de DB: {}", user.username);
-                self.http_client.set_token(token);
+        // 1. Buscamos el token en la tabla de preferencias (Storage Seguro)
+        let token = match self.storage.get_preference("auth_token").await {
+            Ok(Some(t)) => t,
+            _ => {
+                log::info!("ℹ️ No se encontró token en el storage");
                 return Ok(());
             }
+        };
+
+        // 2. Inyectamos el token en el cliente HTTP de inmediato
+        self.http_client.set_token(token);
+        log::info!("✅ Token inyectado en el cliente HTTP");
+
+        // 3. Intentamos recuperar los datos del usuario para log o estado interno
+        if let Ok(Some(user)) = self.storage.get_session().await {
+            log::info!("👤 Sesión hidratada para: {}", user.username);
         }
-        log::info!("ℹ️ No se encontró sesión previa activa");
+
         Ok(())
     }
 
@@ -106,12 +114,11 @@ impl AppContainer {
     }
 
     pub async fn logout(&self) {
-        // 1. Limpiar el token de la memoria (detiene futuras peticiones firmadas)
-        self.http_client.clear_token();
-
-        // 2. Limpiar la base de datos local (evita auto-login al reiniciar)
+        // Borrar objeto usuario
         let _ = self.storage.delete_session().await;
-
-        log::info!("🚪 Sesión cerrada globalmente");
+        // Borrar token de preferencia
+        let _ = self.storage.delete_preference("auth_token").await;
+        // Limpiar RAM
+        self.http_client.clear_token();
     }
 }

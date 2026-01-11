@@ -46,16 +46,27 @@ impl LoginUseCase {
             return Err(AppError::EmailInvalid);
         }
 
+        // 2. Intento de Login contra el Repositorio (API)
         let user_login = self.repository.login(req).await?;
 
-        // CORRECCIÓN 1: save_session es async, necesita .await antes del ?
-        // Además, mapeamos el String de error a AppError
+        // 3. Manejo de Credenciales y Persistencia
         if let Some(token) = &user_login.token {
-            // 2. ACTUALIZACIÓN GLOBAL: Inyectamos el token en el motor de red
+            // A. Memoria RAM: Para peticiones inmediatas
             self.http.set_token(token.clone());
 
-            // 3. PERSISTENCIA: Guardamos en DB local (SQLite/Web) para el próximo arranque
-            let _ = self.storage.save_session(&user_login.clone()).await;
+            // B. DB Local (Preferencia): Guardamos el token para 'init_session'
+            // Usamos save_token que definimos en el SecureStorage
+            self.storage
+                .save_token(token)
+                .await
+                .map_err(|e| AppError::DatabaseError { message: e })?;
+
+            // C. DB Local (Sesión): Guardamos el perfil (sin token por seguridad)
+            self.storage
+                .save_session(&user_login)
+                .await
+                .map_err(|e| e.to_string())
+                .map_err(|e| AppError::DatabaseError { message: e })?;
         }
 
         Ok(user_login)
@@ -67,15 +78,28 @@ impl LoginUseCase {
     }
 
     pub async fn init_session(&self) -> bool {
-        if let Ok(Some(user)) = self.storage.get_session().await {
-            self.http.set_token(user.token);
+        // 1. Intentamos recuperar el token guardado como una preferencia
+        if let Ok(Some(token)) = self.storage.get_preference("auth_token").await {
+            // 2. Inyectamos el token en el cliente HTTP para futuras peticiones
+            self.http.set_token(token);
+
+            // 3. Opcional: Intentamos cargar también los datos del usuario
+            // para que la UI tenga el nombre y foto desde el inicio
+            if let Ok(Some(user)) = self.storage.get_session().await {
+                // Aquí podrías actualizar un estado interno de 'currentUser' si lo tienes
+                log::info!("Sesión restaurada para el usuario: {}", user.username);
+            }
+
             return true;
         }
+
+        log::info!("No se encontró sesión previa.");
         false
     }
 
     pub async fn execute_logout(&self) -> Result<(), String> {
         self.storage.delete_session().await?;
+        self.storage.delete_preference("auth_token").await?;
         self.http.clear_token();
         Ok(())
     }
@@ -93,10 +117,9 @@ impl LoginUseCase {
             .await
             .map_err(|e| AppError::ParseError { message: e })?;
 
-        let token = user_login_google.token.clone()
-            .ok_or(AppError::AuthError {
-                message: "No se recibió un token del servidor".to_string()
-            })?;
+        let token = user_login_google.token.clone().ok_or(AppError::AuthError {
+            message: "No se recibió un token del servidor".to_string(),
+        })?;
         // Y quitamos el '?' porque set_token no devuelve un Result
         self.http.set_token(token);
 

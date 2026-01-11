@@ -1,12 +1,11 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::domain::models::errors::{ApiErrorPayload, AppError};
+use crate::domain::models::responses::HttpResponseObject;
 use reqwest::Method;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::RwLock;
-use crate::domain::models::errors::{ApiErrorPayload, AppError};
-use crate::domain::models::responses::HttpResponseObject;
-
 
 pub struct HttpClientRust {
     client: reqwest::Client,
@@ -26,7 +25,7 @@ impl HttpClientRust {
     }
 
     //Envio de token
-    pub fn  set_token<T: Into<Option<String>>>(&self, token: T) {
+    pub fn set_token<T: Into<Option<String>>>(&self, token: T) {
         if let Ok(mut t) = self.token.write() {
             let token_value: Option<String> = token.into();
 
@@ -34,7 +33,7 @@ impl HttpClientRust {
                 Some(val) => {
                     log::info!("🔑 Token de sesión actualizado");
                     *t = Some(val);
-                },
+                }
                 None => {
                     log::warn!("🗑️ El token recibido es nulo, limpiando sesión");
                     *t = None;
@@ -53,7 +52,8 @@ impl HttpClientRust {
     // No necesita ser async
     fn build_request(&self, method: Method, url: &str) -> reqwest::RequestBuilder {
         // 1. Iniciamos el builder con el cliente
-        let mut builder = self.client
+        let mut builder = self
+            .client
             .request(method.clone(), url)
             .header("x-app-origin", "TopFashion-Angular-App");
 
@@ -88,7 +88,6 @@ impl HttpClientRust {
 
         // 1. Manejo de Sesión Expirada
         if status == reqwest::StatusCode::UNAUTHORIZED {
-            log::warn!("🚫 Sesión expirada (401). Limpiando token...");
             self.logout_internal();
             return Err(AppError::Unauthorized);
         }
@@ -100,30 +99,37 @@ impl HttpClientRust {
 
         // 3. Si el status NO es éxito, procesamos el JSON de error de Spring
         if !status.is_success() {
-            // Intentamos parsear el JSON de error que viene en los bytes
+            // 1. Parsear el JSON completo del backend
             let error_json: serde_json::Value = serde_json::from_slice(&bytes)
                 .unwrap_or(serde_json::json!({ "message": "Error desconocido en el servidor" }));
 
-            // Extraemos el mensaje (Spring usa el campo "message")
-            let message = error_json["exception"]
+            // 2. Prioridad de Mensaje: message (amigable) > exception (técnico)
+            let friendly_message = error_json["message"]
                 .as_str()
-                .or_else(|| error_json["error"].as_str())
-                .unwrap_or("No se pudo obtener el detalle del error")
+                .or_else(|| error_json["exception"].as_str())
+                .unwrap_or("Ocurrió un error inesperado en el servidor")
                 .to_string();
 
+            // 3. Guardar el JSON crudo como String en error_api para trazabilidad
+            let raw_api_error =
+                serde_json::to_string(&error_json).unwrap_or_else(|_| status.to_string());
+
             return Err(AppError::ApiError(ApiErrorPayload {
-                error_api: status.to_string(),
-                message, // "For input string: A4340D"
-                code: status.as_u16() as i16
+                error_api: raw_api_error, // Aquí irá todo el JSON: { "status": 403, "exception": "DisabledException", ... }
+                message: friendly_message, // "Esta cuenta ha sido desactivada..."
+                code: status.as_u16() as i16,
             }));
         }
 
         // 4. Si es éxito, decodificamos el wrapper HttpResponseObject<T>
-        let wrapper: HttpResponseObject<T> = serde_json::from_slice(&bytes).map_err(|e| {
-            AppError::ParseError {
-                message: format!("Error decodificando JSON: {}. Body: {}", e, String::from_utf8_lossy(&bytes)),
-            }
-        })?;
+        let wrapper: HttpResponseObject<T> =
+            serde_json::from_slice(&bytes).map_err(|e| AppError::ParseError {
+                message: format!(
+                    "Error decodificando JSON: {}. Body: {}",
+                    e,
+                    String::from_utf8_lossy(&bytes)
+                ),
+            })?;
 
         Ok(wrapper.data)
     }
@@ -166,27 +172,119 @@ impl HttpClientRust {
     // --- MÉTODOS DE CONVENIENCIA ---
 
     pub async fn get<O>(&self, path: &str) -> Result<O, AppError>
-    where O: DeserializeOwned {
+    where
+        O: DeserializeOwned,
+    {
         self.request::<(), O>(Method::GET, path, None).await
     }
 
     pub async fn post<I, O>(&self, path: &str, body: I) -> Result<O, AppError>
-    where I: Serialize, O: DeserializeOwned  {
+    where
+        I: Serialize,
+        O: DeserializeOwned,
+    {
         self.request(Method::POST, path, Some(body)).await
     }
 
     pub async fn put<I, O>(&self, path: &str, body: I) -> Result<O, AppError>
-    where I: Serialize, O: DeserializeOwned  {
+    where
+        I: Serialize,
+        O: DeserializeOwned,
+    {
         self.request(Method::PUT, path, Some(body)).await
     }
 
     pub async fn patch<I, O>(&self, path: &str, body: I) -> Result<O, AppError>
-    where I: Serialize, O: DeserializeOwned  {
+    where
+        I: Serialize,
+        O: DeserializeOwned,
+    {
         self.request(Method::PATCH, path, Some(body)).await
     }
 
     pub async fn delete<O>(&self, path: &str) -> Result<O, AppError>
-    where O: DeserializeOwned  {
+    where
+        O: DeserializeOwned,
+    {
         self.request::<(), O>(Method::DELETE, path, None).await
+    }
+
+    //Upload file
+    pub async fn upload_multipart<O>(
+        &self,
+        endpoint: &str,
+        bytes: Vec<u8>,
+        file_name: String,
+        content_type: String,
+    ) -> Result<O, AppError>
+    where
+        O: DeserializeOwned,
+    {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        // 1. Usamos tu motor central de construcción de peticiones
+        // Esto inyecta automáticamente el Token y los Global Headers
+        let rb = self.build_request(Method::POST, &url);
+
+        // 2. Construir el formulario multipart
+        let file_part = reqwest::multipart::Part::bytes(bytes)
+            .file_name(file_name)
+            .mime_str(&content_type)
+            .map_err(|e| AppError::ParseError {
+                message: format!("Error en metadatos del archivo: {}", e),
+            })?;
+
+        let form = reqwest::multipart::Form::new().part("file", file_part);
+
+        // 3. Ejecutar la petición
+        let response = rb
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| AppError::NetworkError {
+                message: e.to_string(),
+            })?;
+
+        // 4. Usamos tu interceptor central de respuestas
+        // Esto maneja el 401, parsea el JSON de error de Spring y extrae la data del wrapper
+        self.handle_response(response).await
+    }
+
+    pub async fn download_to_local(
+        &self,
+        endpoint: &str,
+        save_path: &str,
+    ) -> Result<String, AppError> {
+        let url = format!("{}{}", self.base_url, endpoint);
+
+        // 1. Construir petición con Auth y Headers globales
+        let rb = self.build_request(reqwest::Method::GET, &url);
+
+        let response = rb.send().await.map_err(|e| AppError::NetworkError {
+            message: e.to_string(),
+        })?;
+
+        // 2. Si hay error (400, 401, 500), delegamos a handle_response
+        // Usamos () como tipo esperado porque solo queremos que procese el error
+        if !response.status().is_success() {
+            let _ = self.handle_response::<()>(response).await?;
+            return Err(AppError::ServerError {
+                message: "Error inesperado tras validación".into(),
+            });
+        }
+
+        // 3. Descarga de flujo de bytes
+        let bytes = response.bytes().await.map_err(|e| AppError::NetworkError {
+            message: format!("Error al descargar contenido: {}", e),
+        })?;
+
+        // 4. Escritura directa a FileSystem
+        // Nota: El directorio ya debe existir (el Repositorio se encarga de eso)
+        std::fs::write(save_path, &bytes).map_err(|e| AppError::ServerError {
+            message: format!("Error de escritura en disco: {}", e),
+        })?;
+
+        log::info!("✅ Descarga exitosa: {}", save_path);
+        Ok(save_path.to_string())
     }
 }

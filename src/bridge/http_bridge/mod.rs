@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use crate::bridge::main_bridge::AppContainer;
 use crate::domain::models::errors::AppError;
 use crate::infrastructure::http_repository::HttpRepository;
+use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod mobile;
@@ -30,8 +30,23 @@ impl GenericHttpBridge {
     pub(crate) async fn internal_post(
         &self,
         path: String,
-        body: serde_json::Value
+        body: serde_json::Value,
     ) -> Result<serde_json::Value, AppError> {
         self.repository.post(&path, body).await
+    }
+
+    pub(crate) async fn internal_patch(
+        &self,
+        path: String,
+        body: serde_json::Value,
+    ) -> Result<serde_json::Value, AppError> {
+        self.repository.patch(&path, body).await
+    }
+
+    pub(crate) async fn internal_delete(
+        &self,
+        path: String,
+    ) -> Result<serde_json::Value, AppError> {
+        self.repository.delete(&path).await
     }
 }

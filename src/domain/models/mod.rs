@@ -7,3 +7,4 @@ pub mod google_id;
 pub mod google_response;
 pub mod client;
 pub mod delete;
+pub mod preference;
