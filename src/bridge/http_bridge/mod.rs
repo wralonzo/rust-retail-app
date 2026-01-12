@@ -49,4 +49,29 @@ impl GenericHttpBridge {
     ) -> Result<serde_json::Value, AppError> {
         self.repository.delete(&path).await
     }
+
+    pub(crate) async fn internal_upload_file(
+        &self,
+        endpoint: &str,
+        bytes: Vec<u8>,
+        file_name: String,
+        content_type: String,
+
+    ) -> Result<serde_json::Value, AppError> {
+        // Asegúrate de que el repositorio devuelva serde_json::Value
+        self.repository
+            .upload_file::<serde_json::Value>(endpoint, bytes, file_name, content_type)
+            .await
+    }
+
+    pub(crate) async fn internal_download_file(
+        &self,
+        endpoint: String,
+        folder: &str,
+    ) -> Result<String, AppError> {
+        // El repositorio devuelve la ruta (String), no un JSON
+        self.repository
+            .download_and_store_document(endpoint, folder)
+            .await
+    }
 }

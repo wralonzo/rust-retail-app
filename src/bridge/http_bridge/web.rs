@@ -52,6 +52,31 @@ impl GenericHttpBridge {
         self.serialize_success(result)
     }
 
+    pub async fn upload(
+        &self,
+        endpoint: String,
+        bytes: Vec<u8>,
+        file_name: String,
+        content_type: String,
+    ) -> Result<JsValue, JsValue> {
+        let result = self
+            .internal_upload_file(&endpoint, bytes, file_name, content_type)
+            .await
+            .map_err(|e| self.serialize_error(e))?;
+
+        self.serialize_success(result)
+    }
+
+    pub async fn download_file(&self, endpoint: String) -> Result<JsValue, JsValue> {
+        let local_path = self
+            .internal_download_file(endpoint, "./app_data/documents")
+            .await
+            .map_err(|e| self.serialize_error(e))?;
+
+        // Devolvemos el String de la ruta a Angular
+        self.serialize_success(local_path)
+    }
+
     // --- Helpers privados para mantener consistencia ---
     fn serialize_success<T: Serialize>(&self, data: T) -> Result<JsValue, JsValue> {
         let serializer = Serializer::new().serialize_maps_as_objects(true);

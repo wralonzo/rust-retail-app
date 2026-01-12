@@ -11,7 +11,7 @@ pub struct HttpClientRust {
     client: reqwest::Client,
     token: Arc<RwLock<Option<String>>>,
     global_headers: HashMap<String, String>,
-    base_url: String,
+    pub base_url: String,
 }
 
 impl HttpClientRust {
@@ -250,41 +250,74 @@ impl HttpClientRust {
         self.handle_response(response).await
     }
 
-    pub async fn download_to_local(
+    // En infrastructure/http_client_rust.rs
+
+    pub async fn download_file_smart(
         &self,
         endpoint: &str,
-        save_path: &str,
+        _folder: &str,
     ) -> Result<String, AppError> {
         let url = format!("{}{}", self.base_url, endpoint);
-
-        // 1. Construir petición con Auth y Headers globales
         let rb = self.build_request(reqwest::Method::GET, &url);
-
         let response = rb.send().await.map_err(|e| AppError::NetworkError {
             message: e.to_string(),
         })?;
 
-        // 2. Si hay error (400, 401, 500), delegamos a handle_response
-        // Usamos () como tipo esperado porque solo queremos que procese el error
         if !response.status().is_success() {
             let _ = self.handle_response::<()>(response).await?;
             return Err(AppError::ServerError {
-                message: "Error inesperado tras validación".into(),
+                message: "Error en descarga".into(),
             });
         }
 
-        // 3. Descarga de flujo de bytes
+        // --- 1. EXTRAER INFORMACIÓN DE LOS HEADERS PRIMERO (Sin mover 'response') ---
+
+        // Extraer Nombre del archivo
+        let _file_name = response
+            .headers()
+            .get(reqwest::header::CONTENT_DISPOSITION)
+            .and_then(|val| val.to_str().ok())
+            .and_then(|s| {
+                s.split(';')
+                    .find(|part| part.trim().starts_with("filename="))
+                    .map(|p| p.trim().replace("filename=", "").replace("\"", ""))
+            })
+            .unwrap_or_else(|| "archivo_descargado".to_string());
+
+        // Extraer MIME Type (lo guardamos en un String para usarlo después del move)
+        let mime_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        // --- 2. CONSUMIR LA RESPUESTA (Aquí 'response' desaparece) ---
         let bytes = response.bytes().await.map_err(|e| AppError::NetworkError {
-            message: format!("Error al descargar contenido: {}", e),
+            message: e.to_string(),
         })?;
 
-        // 4. Escritura directa a FileSystem
-        // Nota: El directorio ya debe existir (el Repositorio se encarga de eso)
-        std::fs::write(save_path, &bytes).map_err(|e| AppError::ServerError {
-            message: format!("Error de escritura en disco: {}", e),
-        })?;
+        // --- 3. LÓGICA HÍBRIDA ---
 
-        log::info!("✅ Descarga exitosa: {}", save_path);
-        Ok(save_path.to_string())
+        #[cfg(target_arch = "wasm32")]
+        {
+            use base64::{engine::general_purpose, Engine as _};
+            let b64 = general_purpose::STANDARD.encode(&bytes);
+            // Usamos mime_type aquí, así que no hay warning en WASM
+            Ok(format!("data:{};base64,{}", mime_type, b64))
+        }
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // En NATIVO (Mobile/Desktop), mime_type no se usa, así que lo "silenciamos"
+            let _ = mime_type;
+
+            std::fs::create_dir_all(_folder).ok();
+            let full_path = format!("{}/{}", _folder, _file_name);
+            std::fs::write(&full_path, &bytes).map_err(|e| AppError::ServerError {
+                message: e.to_string(),
+            })?;
+            Ok(full_path)
+        }
     }
 }

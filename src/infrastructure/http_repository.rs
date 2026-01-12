@@ -59,22 +59,13 @@ impl HttpRepository {
 
     pub async fn download_and_store_document(
         &self,
-        file_name: String,
         endpoint: String,
         folder: &str,
     ) -> Result<String, AppError> {
-        // En un entorno real, es mejor obtener el path de datos de la app
-        // mediante una configuración inyectada, pero esto funciona para desarrollo:
-
-        if let Err(e) = std::fs::create_dir_all(folder) {
-            return Err(AppError::ServerError {
-                message: format!("Error creando directorio: {}", e),
-            });
-        }
-
-        let full_path = format!("{}/{}", folder, file_name);
-
-        // 2. Ejecutar descarga delegando al cliente HTTP
-        self.api.download_to_local(&endpoint, &full_path).await
+        // El cliente ahora se encarga de:
+        // 1. Preguntar al backend el nombre
+        // 2. Descargar bytes
+        // 3. Si es web, devolver Base64. Si es nativo, devolver Path.
+        self.api.download_file_smart(&endpoint, &folder).await
     }
 }
