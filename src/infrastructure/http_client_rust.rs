@@ -86,50 +86,59 @@ impl HttpClientRust {
     {
         let status = response.status();
 
-        // 1. Manejo de Sesión Expirada
+        // 1. Manejo de Sesión Expirada (401)
+        // Lo manejamos ANTES de intentar leer cualquier cuerpo, porque Spring
+        // a menudo no envía JSON en este caso específico.
         if status == reqwest::StatusCode::UNAUTHORIZED {
+            log::error!("🚫 401 Unauthorized detectado. Limpiando sesión local.");
             self.logout_internal();
             return Err(AppError::Unauthorized);
         }
 
-        // 2. Leemos los bytes UNA SOLA VEZ para poder usarlos varias veces
+        // 2. Intentar leer los bytes de la respuesta
+        // Usamos un mapeo de error más descriptivo para diferenciar fallo de RED vs Servidor
         let bytes = response.bytes().await.map_err(|e| AppError::NetworkError {
-            message: e.to_string(),
+            message: format!("Error de conexión al leer respuesta: {}", e),
         })?;
 
-        // 3. Si el status NO es éxito, procesamos el JSON de error de Spring
+        // 3. Si el status NO es éxito (4xx o 5xx)
         if !status.is_success() {
-            // 1. Parsear el JSON completo del backend
-            let error_json: serde_json::Value = serde_json::from_slice(&bytes)
-                .unwrap_or(serde_json::json!({ "message": "Error desconocido en el servidor" }));
+            // Intentar parsear el JSON de error de Spring si existe
+            let error_json: serde_json::Value =
+                serde_json::from_slice(&bytes).unwrap_or_else(|_| {
+                    // Si no es JSON, devolvemos un objeto genérico con el status
+                    serde_json::json!({
+                        "message": format!("Error del servidor (Status {})", status.as_u16()),
+                        "status": status.as_u16()
+                    })
+                });
 
-            // 2. Prioridad de Mensaje: message (amigable) > exception (técnico)
             let friendly_message = error_json["message"]
                 .as_str()
                 .or_else(|| error_json["exception"].as_str())
                 .unwrap_or("Ocurrió un error inesperado en el servidor")
                 .to_string();
 
-            // 3. Guardar el JSON crudo como String en error_api para trazabilidad
             let raw_api_error =
                 serde_json::to_string(&error_json).unwrap_or_else(|_| status.to_string());
 
             return Err(AppError::ApiError(ApiErrorPayload {
-                error_api: raw_api_error, // Aquí irá todo el JSON: { "status": 403, "exception": "DisabledException", ... }
-                message: friendly_message, // "Esta cuenta ha sido desactivada..."
+                error_api: raw_api_error,
+                message: friendly_message,
                 code: status.as_u16() as i16,
             }));
         }
 
         // 4. Si es éxito, decodificamos el wrapper HttpResponseObject<T>
-        let wrapper: HttpResponseObject<T> =
-            serde_json::from_slice(&bytes).map_err(|e| AppError::ParseError {
-                message: format!(
-                    "Error decodificando JSON: {}. Body: {}",
-                    e,
-                    String::from_utf8_lossy(&bytes)
-                ),
-            })?;
+        let wrapper: HttpResponseObject<T> = serde_json::from_slice(&bytes).map_err(|e| {
+            // Log para depuración si el backend cambia el formato
+            let body_str = String::from_utf8_lossy(&bytes);
+            log::error!("❌ Error de parseo: {}. Body recibido: {}", e, body_str);
+
+            AppError::ParseError {
+                message: format!("Error decodificando JSON de éxito: {}", e),
+            }
+        })?;
 
         Ok(wrapper.data)
     }
