@@ -5,6 +5,9 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND: &'static str = r#"
 import { User } from "./User";
+import { Profile } from "./Profile";
+import { UserAuth } from "./UserAuth";
+import { Employee } from "./Employee";
 import { GoogleClientId } from "./GoogleClientId";
 import { PaginatedResponse } from "./PaginatedResponse";
 

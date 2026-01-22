@@ -18,7 +18,7 @@ impl HttpClientRust {
     pub fn new(base_url: String, initial_headers: HashMap<String, String>) -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url,
+            base_url: base_url.trim().to_string(),
             token: Arc::new(RwLock::new(None)),
             global_headers: initial_headers,
         }
@@ -31,8 +31,10 @@ impl HttpClientRust {
 
             match token_value {
                 Some(val) => {
+                    // Sanitize token to prevent "builder error" from reqwest
+                    let sanitized = val.trim().replace('\n', "").replace('\r', "");
                     log::info!("🔑 Token de sesión actualizado");
-                    *t = Some(val);
+                    *t = Some(sanitized);
                 }
                 None => {
                     log::warn!("🗑️ El token recibido es nulo, limpiando sesión");
@@ -156,7 +158,20 @@ impl HttpClientRust {
         I: Serialize,
         O: DeserializeOwned, // Restricción necesaria para HttpResponseObject
     {
-        let url = format!("{}{}", self.base_url, endpoint);
+        let url = if self.base_url.is_empty() {
+            log::warn!(
+                "⚠️ Petición con URL relativa (base_url está vacía: '{}'): {}",
+                self.base_url,
+                endpoint
+            );
+            endpoint.to_string()
+        } else {
+            format!(
+                "{}/{}",
+                self.base_url.trim_end_matches('/'),
+                endpoint.trim_start_matches('/')
+            )
+        };
 
         // Usamos build_request para centralizar Headers y Auth
         let mut rb = self.build_request(method, &url);
@@ -171,7 +186,7 @@ impl HttpClientRust {
         }
 
         let response = rb.send().await.map_err(|e| AppError::NetworkError {
-            message: e.to_string(),
+            message: format!("{} | URL: {}", e, url),
         })?;
 
         // Interceptor 401 y mapeo de errores/éxito
@@ -251,7 +266,7 @@ impl HttpClientRust {
             .send()
             .await
             .map_err(|e| AppError::NetworkError {
-                message: e.to_string(),
+                message: format!("{} | URL: {}", e, url),
             })?;
 
         // 4. Usamos tu interceptor central de respuestas
@@ -269,7 +284,7 @@ impl HttpClientRust {
         let url = format!("{}{}", self.base_url, endpoint);
         let rb = self.build_request(reqwest::Method::GET, &url);
         let response = rb.send().await.map_err(|e| AppError::NetworkError {
-            message: e.to_string(),
+            message: format!("{} | URL: {}", e, url),
         })?;
 
         if !response.status().is_success() {
@@ -303,7 +318,7 @@ impl HttpClientRust {
 
         // --- 2. CONSUMIR LA RESPUESTA (Aquí 'response' desaparece) ---
         let bytes = response.bytes().await.map_err(|e| AppError::NetworkError {
-            message: e.to_string(),
+            message: format!("{} | URL: {}", e, url),
         })?;
 
         // --- 3. LÓGICA HÍBRIDA ---

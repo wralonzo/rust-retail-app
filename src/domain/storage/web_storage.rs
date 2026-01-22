@@ -34,7 +34,7 @@ impl SecureStorage for WebStorage {
         // Clonamos aquí para que el 'user' original que recibió la función
         // siga teniendo su token intacto para futuras peticiones HTTP.
         let mut user_to_save = user.clone();
-        user_to_save.token = None;
+        user_to_save.user.token = None;
 
         // 3. Serializar a JSON
         let serialized = serde_json::to_string(&user_to_save).map_err(|e| e.to_string())?;

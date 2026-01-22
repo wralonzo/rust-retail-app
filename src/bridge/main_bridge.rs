@@ -2,6 +2,7 @@ use crate::domain::models::errors::AppError;
 use crate::domain::models::user::User;
 use crate::domain::storage::storage::SecureStorage;
 use crate::infrastructure::http_client_rust::HttpClientRust;
+use crate::utils::logger::init_logger;
 use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +28,10 @@ pub fn init_core_config_wasm(url: String) {
     #[cfg(target_arch = "wasm32")]
     console_error_panic_hook::set_once();
 
+    init_logger();
+
+    log::info!("🚀 core_config_wasm: Recibida URL: '{}'", url);
+
     // Log para depuración (opcional pero recomendado)
     // web_sys::console::log_1(&format!("Rust: Inicializando con URL {}", url).into());
 
@@ -35,6 +40,11 @@ pub fn init_core_config_wasm(url: String) {
 
 impl AppContainer {
     pub fn init(base_url: String) {
+        init_logger();
+        log::info!(
+            "🏗️ AppContainer::init: Inicializando con base_url: '{}'",
+            base_url
+        );
         let mut headers = HashMap::new();
         headers.insert("Accept".to_string(), "application/json".to_string());
 
@@ -87,7 +97,7 @@ impl AppContainer {
 
         // 3. Intentamos recuperar los datos del usuario para log o estado interno
         if let Ok(Some(user)) = self.storage.get_session().await {
-            log::info!("👤 Sesión hidratada para: {}", user.username);
+            log::info!("👤 Sesión hidratada para: {}", user.profile.username);
         }
 
         Ok(())
@@ -97,7 +107,7 @@ impl AppContainer {
         // Intentamos obtener la sesión
         match self.storage.get_session().await {
             Ok(Some(user)) => {
-                log::info!("✅ Sesión recuperada de DB: {}", user.username);
+                log::info!("✅ Sesión recuperada de DB: {}", user.profile.username);
                 Ok(Some(user))
             }
             Ok(None) => {

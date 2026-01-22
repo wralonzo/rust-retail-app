@@ -42,15 +42,11 @@ impl LoginUseCase {
             }); // Usamos el error semántico que definimos antes
         }
 
-        if !req.username.contains('@') {
-            return Err(AppError::EmailInvalid);
-        }
-
         // 2. Intento de Login contra el Repositorio (API)
         let user_login = self.repository.login(req).await?;
 
         // 3. Manejo de Credenciales y Persistencia
-        if let Some(token) = &user_login.token {
+        if let Some(token) = &user_login.user.token {
             // A. Memoria RAM: Para peticiones inmediatas
             self.http.set_token(token.clone());
 
@@ -87,7 +83,10 @@ impl LoginUseCase {
             // para que la UI tenga el nombre y foto desde el inicio
             if let Ok(Some(user)) = self.storage.get_session().await {
                 // Aquí podrías actualizar un estado interno de 'currentUser' si lo tienes
-                log::info!("Sesión restaurada para el usuario: {}", user.username);
+                log::info!(
+                    "Sesión restaurada para el usuario: {}",
+                    user.profile.username
+                );
             }
 
             return true;
@@ -117,9 +116,13 @@ impl LoginUseCase {
             .await
             .map_err(|e| AppError::ParseError { message: e })?;
 
-        let token = user_login_google.token.clone().ok_or(AppError::AuthError {
-            message: "No se recibió un token del servidor".to_string(),
-        })?;
+        let token = user_login_google
+            .user
+            .token
+            .clone()
+            .ok_or(AppError::AuthError {
+                message: "No se recibió un token del servidor".to_string(),
+            })?;
         // Y quitamos el '?' porque set_token no devuelve un Result
         self.http.set_token(token);
 

@@ -48,7 +48,7 @@ impl SecureStorage for SqliteStorage {
         let mut user_to_save = user.clone();
 
         // 2. Removemos el token antes de serializar a JSON
-        user_to_save.token = None;
+        user_to_save.user.token = None;
 
         // 3. Serializamos la versión "limpia"
         let json = serde_json::to_string(&user_to_save).map_err(|e| e.to_string())?;
