@@ -56,7 +56,6 @@ impl GenericHttpBridge {
         bytes: Vec<u8>,
         file_name: String,
         content_type: String,
-
     ) -> Result<serde_json::Value, AppError> {
         // Asegúrate de que el repositorio devuelva serde_json::Value
         self.repository

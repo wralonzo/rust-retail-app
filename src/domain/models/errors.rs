@@ -7,7 +7,9 @@ pub struct ApiErrorPayload {
     pub code: i16,
 }
 
-#[derive(Debug, thiserror::Error, uniffi::Error, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(
+    Debug, thiserror::Error, uniffi::Error, serde::Serialize, serde::Deserialize, ts_rs::TS,
+)]
 #[uniffi(flat_error)]
 #[ts(export)]
 #[serde(tag = "type", content = "payload")]
@@ -50,6 +52,9 @@ pub enum AppError {
 
     #[error("Almacenamiento local, no compatible, {message}")]
     DatabaseError { message: String },
+
+    #[error("Error de configuración: {message}")]
+    ConfigurationError { message: String },
 
     #[error("Error desconocido")]
     Unknown,

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::domain::models::errors::AppError;
 use crate::domain::models::login_request::LoginRequest;
-use crate::domain::models::responses::PaginatedResponse; // Importamos el modelo de paginación
 use crate::domain::models::user::User;
 use crate::domain::storage::storage::SecureStorage;
 use crate::infrastructure::auth_repository::{AuthRepository, AuthRepositoryTrait};
@@ -11,7 +10,7 @@ use crate::infrastructure::http_client_rust::HttpClientRust;
 pub struct LoginUseCase {
     repository: Arc<AuthRepository>, // Cambiado a Arc<dyn ...>
     storage: Arc<dyn SecureStorage>, // Cambiado a Arc<dyn ...>
-    pub http: Arc<HttpClientRust>,
+    http: Arc<HttpClientRust>,
 }
 
 impl LoginUseCase {
@@ -66,11 +65,6 @@ impl LoginUseCase {
         }
 
         Ok(user_login)
-    }
-
-    /// Lógica para obtener la lista de usuarios paginada
-    pub async fn get_all_users(&self, page: u32) -> Result<PaginatedResponse<User>, AppError> {
-        self.repository.fetch_users(page).await
     }
 
     pub async fn init_session(&self) -> bool {

@@ -1,12 +1,11 @@
+use crate::bridge::main_bridge::AppContainer;
 use crate::domain::models::errors::AppError;
 use crate::domain::models::google_id::GoogleClientId;
 use crate::domain::models::login_request::LoginRequest;
-use crate::domain::models::responses::PaginatedResponse;
 use crate::domain::models::user::User;
 use crate::use_cases::auth_user_use_case::LoginUseCase;
 use crate::use_cases::get_google_config_use_case::GetGoogleConfigUseCase;
 use std::sync::Arc;
-use crate::bridge::main_bridge::AppContainer;
 
 use crate::infrastructure::auth_repository::AuthRepository;
 
@@ -31,7 +30,7 @@ impl AuthBridge {
         let login_use_case_internal = Arc::new(LoginUseCase::new(
             auth_repo,
             container.storage.clone(),
-            container.http_client.clone() // Inyección vital
+            container.http_client.clone(), // Inyección vital
         ));
 
         let google_use_case = Arc::new(GetGoogleConfigUseCase::new(container.http_client.clone()));
@@ -58,17 +57,12 @@ impl AuthBridge {
         self.google_use_case.execute().await
     }
 
-    pub(crate) async fn internal_fetch_users(
-        &self,
-        page: u32,
-    ) -> Result<PaginatedResponse<User>, AppError> {
-        self.login_use_case.get_all_users(page).await
-    }
-
     pub(crate) async fn internal_login_google(
         &self,
         app_google_id: String,
     ) -> Result<User, AppError> {
-        self.login_use_case.execute_login_google(app_google_id).await
+        self.login_use_case
+            .execute_login_google(app_google_id)
+            .await
     }
 }

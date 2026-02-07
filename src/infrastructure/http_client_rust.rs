@@ -11,14 +11,14 @@ pub struct HttpClientRust {
     client: reqwest::Client,
     token: Arc<RwLock<Option<String>>>,
     global_headers: HashMap<String, String>,
-    pub base_url: String,
+    pub base_url: RwLock<String>,
 }
 
 impl HttpClientRust {
     pub fn new(base_url: String, initial_headers: HashMap<String, String>) -> Self {
         Self {
             client: reqwest::Client::new(),
-            base_url: base_url.trim().to_string(),
+            base_url: RwLock::new(base_url.trim().trim_matches('\0').to_string()),
             token: Arc::new(RwLock::new(None)),
             global_headers: initial_headers,
         }
@@ -41,6 +41,16 @@ impl HttpClientRust {
                     *t = None;
                 }
             }
+        }
+    }
+
+    pub fn set_base_url(&self, new_url: String) {
+        if let Ok(mut url_guard) = self.base_url.write() {
+            let clean_url = new_url.trim().trim_matches('\0').to_string();
+            log::info!("🌐 HttpClient: URL actualizada a: {}", clean_url);
+            *url_guard = clean_url;
+        } else {
+            log::error!("❌ Error: No se pudo bloquear base_url para escritura (Lock poisoned)");
         }
     }
 
@@ -158,20 +168,24 @@ impl HttpClientRust {
         I: Serialize,
         O: DeserializeOwned, // Restricción necesaria para HttpResponseObject
     {
-        let url = if self.base_url.is_empty() {
-            log::warn!(
-                "⚠️ Petición con URL relativa (base_url está vacía: '{}'): {}",
-                self.base_url,
-                endpoint
-            );
-            endpoint.to_string()
-        } else {
-            format!(
-                "{}/{}",
-                self.base_url.trim_end_matches('/'),
-                endpoint.trim_start_matches('/')
-            )
+        let current_base = {
+            let guard = self.base_url.read().unwrap();
+            guard.clone()
         };
+
+        if current_base.is_empty() {
+            log::error!("❌ Error: Base URL está vacía en HttpClient");
+            return Err(AppError::NetworkError {
+                message: "Base URL no configurada".to_string(),
+            });
+        }
+
+        // 2. Construir la URL completa
+        let url = format!(
+            "{}/{}",
+            current_base.trim_end_matches('/'),
+            endpoint.trim_start_matches('/')
+        );
 
         // Usamos build_request para centralizar Headers y Auth
         let mut rb = self.build_request(method, &url);
@@ -244,8 +258,23 @@ impl HttpClientRust {
     where
         O: DeserializeOwned,
     {
-        let url = format!("{}{}", self.base_url, endpoint);
+        // ✅ FORMA CORRECTA: Leemos, clonamos y el Guard muere al final de esta línea
+        let current_base = self
+            .base_url
+            .read()
+            .map(|guard| guard.clone()) // Clonamos el String contenido
+            .unwrap_or_else(|_| "".to_string()); // Si falla (poisoned), string vacío
 
+        if current_base.is_empty() {
+            log::error!("❌ Error: Base URL está vacía");
+            // ... manejar error
+        }
+
+        let url = format!(
+            "{}/{}",
+            current_base.trim_end_matches('/'),
+            endpoint.trim_start_matches('/')
+        );
         // 1. Usamos tu motor central de construcción de peticiones
         // Esto inyecta automáticamente el Token y los Global Headers
         let rb = self.build_request(Method::POST, &url);
@@ -281,7 +310,24 @@ impl HttpClientRust {
         endpoint: &str,
         _folder: &str,
     ) -> Result<String, AppError> {
-        let url = format!("{}{}", self.base_url, endpoint);
+        // Obtenemos la URL actual del Lock
+        // ✅ FORMA CORRECTA: Leemos, clonamos y el Guard muere al final de esta línea
+        let current_base = self
+            .base_url
+            .read()
+            .map(|guard| guard.clone()) // Clonamos el String contenido
+            .unwrap_or_else(|_| "".to_string()); // Si falla (poisoned), string vacío
+
+        if current_base.is_empty() {
+            log::error!("❌ Error: Base URL está vacía");
+            // ... manejar error
+        }
+
+        let url = format!(
+            "{}/{}",
+            current_base.trim_end_matches('/'),
+            endpoint.trim_start_matches('/')
+        );
         let rb = self.build_request(reqwest::Method::GET, &url);
         let response = rb.send().await.map_err(|e| AppError::NetworkError {
             message: format!("{} | URL: {}", e, url),

@@ -49,15 +49,6 @@ impl AuthBridge {
         Ok(serde_wasm_bindgen::to_value(&user).unwrap())
     }
 
-    #[wasm_bindgen(js_name = getUsers, skip_typescript)]
-    pub async fn get_users_wasm(&self, page: u32) -> Result<JsValue, JsValue> {
-        let user_page = self
-            .internal_fetch_users(page)
-            .await
-            .map_err(Self::map_to_js)?;
-        Ok(serde_wasm_bindgen::to_value(&user_page).unwrap())
-    }
-
     #[wasm_bindgen(js_name = getIdGoogleClient, skip_typescript)]
     pub async fn get_id_google_client_wasm(&self) -> Result<JsValue, JsValue> {
         let result = self
@@ -112,5 +103,17 @@ impl AuthBridge {
 
         // Convertimos Option<User> -> User (Object) o null (JsValue::NULL)
         Ok(serde_wasm_bindgen::to_value(&user_option).unwrap_or(JsValue::NULL))
+    }
+
+    #[wasm_bindgen(js_name = getConfig, skip_typescript)]
+    pub fn get_config_wasm(&self) -> String {
+        let container = AppContainer::get_instance();
+        // ✅ Leemos del lock, clonamos el contenido y manejamos el posible error de lock
+        container
+            .http_client
+            .base_url
+            .read()
+            .map(|guard| guard.clone())
+            .unwrap_or_else(|_| "Error: Lock poisoned".to_string())
     }
 }

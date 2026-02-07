@@ -30,12 +30,22 @@ pub fn init_core_config_wasm(url: String) {
 
     init_logger();
 
-    log::info!("🚀 core_config_wasm: Recibida URL: '{}'", url);
+    // 1. Limpieza de entrada
+    let clean_url = url.trim().trim_matches('\0').to_string();
 
-    // Log para depuración (opcional pero recomendado)
-    // web_sys::console::log_1(&format!("Rust: Inicializando con URL {}", url).into());
+    if clean_url.is_empty() {
+        log::error!("❌ initCoreConfig: URL vacía. No se puede inicializar el Bridge.");
+        return;
+    }
 
-    AppContainer::init(url);
+    // 2. Lógica de Singleton Resiliente
+    if let Some(container) = INSTANCE.get() {
+        log::info!("🔄 Re-configurando URL: '{}'", clean_url);
+        container.http_client.set_base_url(clean_url);
+    } else {
+        log::info!("🏗️ Creando nueva instancia de AppContainer...");
+        AppContainer::init(clean_url);
+    }
 }
 
 impl AppContainer {
@@ -71,7 +81,13 @@ impl AppContainer {
         };
 
         // Guardar en la instancia global
-        let _ = INSTANCE.set(container);
+        if let Err(_) = INSTANCE.set(container) {
+            log::warn!(
+                "⚠️ AppContainer ALREADY initialized! Ignoring new configuration with base_url"
+            )
+        } else {
+            log::info!("✅ AppContainer initialized successfully.");
+        }
     }
 
     /// Obtiene la instancia global.

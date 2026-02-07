@@ -1,10 +1,10 @@
 use super::AuthBridge;
+use crate::bridge::main_bridge::AppContainer;
 use crate::domain::models::errors::AppError;
 use crate::domain::models::google_response::GoogleResponse;
 use crate::domain::models::user::User;
-use std::sync::Arc;
 use send_wrapper::SendWrapper;
-use crate::bridge::main_bridge::AppContainer;
+use std::sync::Arc;
 
 #[derive(uniffi::Record)]
 pub struct UserPaginatedResponse {
@@ -41,21 +41,6 @@ impl AuthBridge {
         })
     }
 
-    pub async fn get_users(&self, page: u32) -> Result<UserPaginatedResponse, AppError> {
-        let future = self.internal_fetch_users(page);
-        let internal_data = SendWrapper::new(future).await?;
-
-        Ok(UserPaginatedResponse {
-            content: internal_data.content,
-            total_elements: internal_data.total_elements,
-            total_pages: internal_data.total_pages,
-            size: internal_data.size,
-            number: internal_data.number,
-            last: internal_data.last,
-            first: internal_data.first,
-        })
-    }
-
     pub async fn login_google(&self, google_app_id: String) -> Result<User, AppError> {
         SendWrapper::new(self.internal_login_google(google_app_id)).await
     }
@@ -67,7 +52,7 @@ impl AuthBridge {
 
     pub async fn get_user_local(&self) -> Result<Option<User>, AppError> {
         let container = AppContainer::get_instance();
-        
+
         // Envolvemos la llamada al container en SendWrapper
         SendWrapper::new(container.get_user_local()).await
     }
