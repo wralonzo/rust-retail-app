@@ -1,5 +1,9 @@
+# 0. Configurar PATH para Cargo y Rust
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+Set-Location $PSScriptRoot
+
 # 1. Definición de Rutas
-$ANGULAR_PROJECT_ROOT = "C:\Users\BDGSA\Documents\projects\angular\front-spa\web-retail"
+$ANGULAR_PROJECT_ROOT = "C:\Users\willi\Documents\wralonzo-software\saas-crm\web-wrapp"
 $ANGULAR_ASSETS_PATH = "$ANGULAR_PROJECT_ROOT\src\assets\retail-shop"
 
 # 2. Limpieza de Carpeta Destino
